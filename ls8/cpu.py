@@ -5,6 +5,16 @@ LDI = 0b10000010
 PRN = 0b01000111
 HLT = 0b00000001
 MUL = 0b10100010
+PUSH = 0b01000101
+POP = 0b01000110
+SP = 7
+CALL = 0b01010000
+RET = 0b00010001
+ADD = 0b10100000
+CMP = 0b10100111
+JMP = 0b01010100
+JEQ = 0b01010101
+JNE = 0b01010110
 
 
 class CPU:
@@ -19,6 +29,24 @@ class CPU:
 
         # variable are called registers and each can hold a sing byte
         self.reg = [0] * 8
+        self.sp = 7
+        self.branchtable = {}
+        self.branchtable[HLT] = self.hlt
+        self.branchtable[LDI] = self.ldi
+        self.branchtable[PRN] = self.prn
+        self.branchtable[MUL] = self.mul
+        self.branchtable[PUSH] = self.push
+        self.branchtable[POP] = self.pop
+        self.branchtable[CALL] = self.call
+        self.branchtable[RET] = self.ret
+        self.branchtable[ADD] = self.add
+        self.branchtable[CMP] = self.CMP
+        self.branchtable[JMP] = self.jmp
+        self.branchtable[JEQ] = self.jeq
+        self.branchtable[JNE] = self.jne
+        self.E = 0
+        self.L = 0
+        self.G = 0
 
     def load(self):
         """Load a program into memory."""
@@ -92,6 +120,54 @@ class CPU:
 
         print()
 
+    def jne(self):
+        if self.E == 0:
+            self.pc = self.reg[self.ram[self.pc + 1]]
+        else:
+            self.pc += 2
+
+    def jeq(self):
+        if self.E == 1:
+            self.pc = self.reg[self.ram[self.pc + 1]]
+        else:
+            self.pc += 2
+
+    def jmp(self):
+        self.pc = self.reg[self.ram[self.pc + 1]]
+
+    def CMP(self):
+        reg_a = self.reg[self.ram[self.pc + 1]]
+        reg_b = self.reg[self.ram[self.pc + 2]]
+
+        if reg_a == reg_b:
+            self.E = 1
+        elif reg_a < reg_b:
+            self.L = 1
+        elif reg_a > reg_b:
+            self.G = 1
+        self.pc += 3
+
+    def call(self):
+        return_addr = self.pc + 2
+        self.reg[SP] -= 1
+        addr_to_push_to = self.reg[SP]
+        self.ram[addr_to_push_to] = return_addr
+        reg_num = self.ram[self.pc + 1]
+        sub_addr = self.reg[reg_num]
+        self.pc = sub_addr
+
+    def ret(self):
+        address_pop_from = self.reg[SP]
+        return_addr = self.ram[address_pop_from]
+        self.reg[SP] += 1
+        self.pc = return_addr
+
+    def add(self):
+        operand_a = self.ram_read(self.pc + 1)
+        operand_b = self.ram_read(self.pc + 2)
+        self.alu("ADD", operand_a, operand_b)
+        self.pc += 3
+
     def ram_read(self, address):
         return self.ram[address]
 
@@ -118,16 +194,32 @@ class CPU:
         self.alu("MUL", operand_a, operand_b)
         self.pc += 3
 
+    def push(self):
+        self.reg[SP] -= 1
+
+        reg_num = self.ram_read(self.pc + 1)
+        value = self.reg[reg_num]
+        push_to = self.reg[SP]
+        self.ram[push_to] = value
+
+        self.pc += 2
+
+    def pop(self):
+        address_pop_from = self.reg[SP]
+        value = self.ram[address_pop_from]
+
+        reg_num = self.ram[self.pc + 1]
+        self.reg[reg_num] = value
+
+        self.reg[SP] += 1
+
+        self.pc += 2
+
     def run(self):
         """Run the CPU."""
         self.switch = True
 
         while self.switch:
-            if self.ram[self.pc] == LDI:
-                self.ldi()
-            elif self.ram[self.pc] == PRN:
-                self.prn()
-            elif self.ram[self.pc] == MUL:
-                self.mul()
-            elif self.ram[self.pc] == HLT:
-                self.hlt()
+            instruction_register = self.pc
+            instruction = self.ram[instruction_register]
+            self.branchtable[instruction]()
